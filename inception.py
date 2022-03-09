@@ -65,13 +65,22 @@ if __name__ == '__main__':
             f"{ (finished_startup_ns - start_ns)/1e9 }\n")
 
         # wait for the network to come up
+        max_network_retries = 60
+        retry = 0
         while True:
             try:
                 socket.gethostbyname('builder.libguestfs.org')
                 break
             except socket.gaierror:
-                print('Waiting for network...')
+                if retry == max_network_retries:
+                    print(f'Timeout while waiting for network!')
+                    results_file.write(f"{config['current_nesting']},networktimeout," +
+                        f"{ max_network_retries }\n")
+                    sys.exit(1)
+                elif retry % 5 == 0:
+                    print(f'Waiting for network ({retry}/{max_network_retries})...')
                 time.sleep(1)
+            retry += 1
         network_up_ns = time.monotonic_ns()
         results_file.write(f"{config['current_nesting']},waitingfornet," +
             f"{ (network_up_ns - finished_startup_ns)/1e9 }\n")
