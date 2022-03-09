@@ -5,6 +5,7 @@ import sys
 import time
 import json
 import tempfile
+import socket
 
 default_config = {
     'max_nesting': 4,
@@ -64,9 +65,16 @@ if __name__ == '__main__':
             f"{ (finished_startup_ns - start_ns)/1e9 }\n")
 
         # wait for the network to come up
-        while os.system('bash -c "ping -c 1 builder.libguestfs.org &> /dev/null"') != 0:
-            print('Waiting for network...')
-            time.sleep(1)
+        while True:
+            try:
+                socket.gethostbyname('builder.libguestfs.org')
+                break
+            except socket.gaierror:
+                print('Waiting for network...')
+                time.sleep(1)
+        network_up_ns = time.monotonic_ns()
+        results_file.write(f"{config['current_nesting']},waitingfornet," +
+            f"{ (network_up_ns - finished_startup_ns)/1e9 }\n")
 
         # if we're not too deep, start a guest vm
         if config['current_nesting'] < config['max_nesting']:
@@ -89,7 +97,7 @@ if __name__ == '__main__':
             assert 0 == os.system(virtbuilder_command)
             finished_virtbuilder_ns = time.monotonic_ns()
             results_file.write(f"{config['current_nesting']},virtbuilder," +
-                f"{ (finished_virtbuilder_ns - finished_startup_ns)/1e9 }\n")
+                f"{ (finished_virtbuilder_ns - network_up_ns)/1e9 }\n")
 
             # resize the disk image
             resize_command = (f"qemu-img create -f qcow2 {guest_image.name} {guest_disk_M}M && " +
